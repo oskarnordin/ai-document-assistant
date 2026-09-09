@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import pdfParse from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 import { embedMany } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
@@ -40,7 +40,9 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const pdfData = await pdfParse(buffer);
+    const parser = new PDFParse({ data: buffer });
+    const pdfData = await parser.getText();
+    await parser.destroy();
     const fullText = pdfData.text;
 
     const textChunks = splitTextIntoChunks(fullText);
