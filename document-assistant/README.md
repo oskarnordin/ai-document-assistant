@@ -2,11 +2,9 @@
 
 A small web app where you **upload a PDF** and then **chat with it** — you ask questions, and an AI answers using only the content of that PDF. This is a classic **RAG** app (Retrieval-Augmented Generation).
 
-This README explains **everything** in the project: what each file does, how data flows, and the concepts behind it (in plain language).
-
 ---
 
-## 1. The big idea (in one paragraph)
+## 1. The big idea
 
 Normal AI chatbots (like plain ChatGPT) only know what they were trained on — they've never seen _your_ PDF. This app fixes that by:
 
