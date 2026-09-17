@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useState } from "react";
 import {
+  AlertCircle,
   Bot,
   CheckCircle2,
   FileText,
@@ -45,19 +46,30 @@ export default function Home() {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await fetch("/api/upload", {
-      method: "POST",
-      body: formData,
-    });
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-    if (res.ok) {
-      setUploadOk(true);
-      setUploadStatus("Dokumentet är redo! Du kan ställa frågor nu.");
-    } else {
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setUploadOk(true);
+        setUploadStatus("Dokumentet är redo! Du kan ställa frågor nu.");
+      } else {
+        setUploadOk(false);
+        const detailedMessage = data?.details
+          ? `${data.error}: ${data.details}`
+          : data?.error || "Kunde inte läsa in filen.";
+        setUploadStatus(detailedMessage);
+      }
+    } catch {
       setUploadOk(false);
-      setUploadStatus("Kunde inte läsa in filen.");
+      setUploadStatus("Nätverksfel: Kunde inte ansluta till servern.");
+    } finally {
+      setIsUploading(false);
     }
-    setIsUploading(false);
   };
 
   const isBusy = status !== "ready";
@@ -96,13 +108,23 @@ export default function Home() {
           </label>
 
           {uploadStatus && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div
+              className={`flex items-center gap-2 text-sm ${
+                uploadOk
+                  ? "text-green-600 dark:text-green-500"
+                  : isUploading
+                    ? "text-muted-foreground"
+                    : "text-destructive"
+              }`}
+            >
               {uploadOk ? (
-                <CheckCircle2 className="size-4 text-green-600" />
+                <CheckCircle2 className="size-4 shrink-0 text-green-600 dark:text-green-500" />
+              ) : isUploading ? (
+                <FileText className="size-4 shrink-0" />
               ) : (
-                <FileText className="size-4" />
+                <AlertCircle className="size-4 shrink-0 text-destructive" />
               )}
-              {uploadStatus}
+              <span>{uploadStatus}</span>
             </div>
           )}
         </CardContent>

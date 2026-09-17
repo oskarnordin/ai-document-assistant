@@ -64,10 +64,14 @@ export async function POST(req: NextRequest) {
     if (error) throw error;
 
     return NextResponse.json({ success: true, count: textChunks.length });
-  } catch (err) {
-    console.error(err);
+  } catch (err: unknown) {
+    console.error("PDF processing error:", err);
+
+    const message =
+      err instanceof Error ? err.message : "Ett okänt fel uppstod";
+
     return NextResponse.json(
-      { error: "Något gick fel vid bearbetningen" },
+      { error: "Något gick fel vid bearbetningen", details: message },
       { status: 500 },
     );
   }
