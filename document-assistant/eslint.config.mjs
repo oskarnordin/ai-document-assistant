@@ -10,9 +10,14 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-  // Global ignoreringsregel för byggfiler och moduler
   {
-    ignores: ["**/.next/**", "**/node_modules/**", "**/dist/**", "**/build/**"],
+    ignores: [
+      "**/.next/**",
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/coverage/**",
+    ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
