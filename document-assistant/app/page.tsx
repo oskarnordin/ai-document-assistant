@@ -132,7 +132,7 @@ export default function Home() {
           <CardTitle>2. Ställ frågor om dokumentet</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4 h-[400px] overflow-y-auto rounded-lg border border-border p-4">
+          <div className="space-y-4 h-100 overflow-y-auto rounded-lg border border-border p-4">
             {messages.length === 0 && (
               <p className="text-sm text-muted-foreground">
                 Inga meddelanden än. Ställ en fråga nedan när ditt dokument är
