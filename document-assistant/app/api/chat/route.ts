@@ -1,4 +1,4 @@
-import { streamText, embed, convertToModelMessages } from "ai";
+import { streamText, embed, convertToCoreMessages, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -57,12 +57,12 @@ export async function POST(req: Request) {
 ${context}
 
 Om svaret inte finns i kontexten, säg att informationen saknas i dokumentet.`,
-      messages: await convertToModelMessages(messages),
+      messages: await convertToCoreMessages(messages),
       tools: {
-        getSummaryCard: {
+        getSummaryCard: tool({
           description:
             "Används när användaren ber om en sammanfattning eller nyckeltal för dokumentet.",
-          inputSchema: z.object({
+          parameters: z.object({
             title: z.string().describe("Titel för sammanfattningen"),
             bulletPoints: z
               .array(z.string())
@@ -71,11 +71,11 @@ Om svaret inte finns i kontexten, säg att informationen saknas i dokumentet.`,
           execute: async ({ title, bulletPoints }) => {
             return { title, bulletPoints, status: "generated" };
           },
-        },
+        }),
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    return result.toDataStreamResponse();
   } catch (err) {
     console.error(err);
     return NextResponse.json(

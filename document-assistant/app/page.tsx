@@ -1,7 +1,6 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
 import { useState } from "react";
 import {
   AlertCircle,
@@ -25,12 +24,10 @@ import {
 import { Input } from "@/components/ui/input";
 
 export default function Home() {
-  const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-    }),
+  const { messages, input, handleInputChange, handleSubmit, status } = useChat({
+    api: "/api/chat",
   });
-  const [input, setInput] = useState("");
+
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
   const [uploadOk, setUploadOk] = useState(false);
@@ -161,59 +158,59 @@ export default function Home() {
                       : "bg-muted"
                   }`}
                 >
-                  {m.parts.map((part, index) => {
-                    if (part.type === "text") {
-                      return (
-                        <p key={index} className="whitespace-pre-wrap">
-                          {part.text}
-                        </p>
-                      );
-                    }
+                  {m.parts ? (
+                    m.parts.map((part, index) => {
+                      if (part.type === "text") {
+                        return (
+                          <p key={index} className="whitespace-pre-wrap">
+                            {part.text}
+                          </p>
+                        );
+                      }
 
-                    if (
-                      part.type === "tool-getSummaryCard" &&
-                      part.state === "output-available"
-                    ) {
-                      const { title, bulletPoints } = part.output as {
-                        title: string;
-                        bulletPoints: string[];
-                      };
-                      return (
-                        <Card key={part.toolCallId} className="mt-3 text-left">
-                          <CardHeader>
-                            <CardTitle className="text-sm">{title}</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <ul className="list-disc ml-5 text-sm space-y-1">
-                              {bulletPoints.map((pt: string, idx: number) => (
-                                <li key={idx}>{pt}</li>
-                              ))}
-                            </ul>
-                          </CardContent>
-                        </Card>
-                      );
-                    }
+                      if (
+                        part.type === "tool-invocation" &&
+                        part.toolInvocation.toolName === "getSummaryCard" &&
+                        part.toolInvocation.state === "result"
+                      ) {
+                        const { title, bulletPoints } = part.toolInvocation
+                          .result as {
+                          title: string;
+                          bulletPoints: string[];
+                        };
+                        return (
+                          <Card
+                            key={part.toolInvocation.toolCallId}
+                            className="mt-3 text-left"
+                          >
+                            <CardHeader>
+                              <CardTitle className="text-sm">{title}</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <ul className="list-disc ml-5 text-sm space-y-1">
+                                {bulletPoints.map((pt: string, idx: number) => (
+                                  <li key={idx}>{pt}</li>
+                                ))}
+                              </ul>
+                            </CardContent>
+                          </Card>
+                        );
+                      }
 
-                    return null;
-                  })}
+                      return null;
+                    })
+                  ) : (
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                  )}
                 </div>
               </div>
             ))}
           </div>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (input.trim()) {
-                sendMessage({ text: input });
-                setInput("");
-              }
-            }}
-            className="mt-4 flex gap-2"
-          >
+          <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
             <Input
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               placeholder="Fråga något om ditt dokument..."
               disabled={isBusy}
             />

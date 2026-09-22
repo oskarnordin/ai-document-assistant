@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFParse } from "pdf-parse";
+import pdfParse from "pdf-parse";
 import { embedMany } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
@@ -9,19 +9,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-function splitTextIntoChunks(
-  text: string,
-  chunkSize = 500,
-  chunkOverlap = 50,
-): string[] {
+function chunkText(text: string, chunkSize = 1000, overlap = 200): string[] {
   const chunks: string[] = [];
   let start = 0;
 
   while (start < text.length) {
     const end = start + chunkSize;
-    const chunk = text.slice(start, end);
-    chunks.push(chunk);
-    start += chunkSize - chunkOverlap;
+    chunks.push(text.slice(start, end));
+    start += chunkSize - overlap;
   }
 
   return chunks;
@@ -30,7 +25,7 @@ function splitTextIntoChunks(
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const file = formData.get("file") as File;
+    const file = formData.get("file") as File | null;
 
     if (!file) {
       return NextResponse.json(
@@ -39,39 +34,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const parser = new PDFParse({ data: buffer });
-    const pdfData = await parser.getText();
-    await parser.destroy();
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Byt ut new pdfParse(...) mot direkt anrop
+    const pdfData = await pdfParse(buffer);
     const fullText = pdfData.text;
 
-    const textChunks = splitTextIntoChunks(fullText);
+    if (!fullText || fullText.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Kunde inte extrahera någon text från PDF:en" },
+        { status: 400 },
+      );
+    }
+
+    const chunks = chunkText(fullText);
 
     const { embeddings } = await embedMany({
       model: openai.embedding("text-embedding-3-small"),
-      values: textChunks,
+      values: chunks,
     });
 
-    const rowsToInsert = textChunks.map((chunk, index) => ({
-      content: chunk,
+    const rowsToInsert = chunks.map((content, index) => ({
+      content,
       embedding: embeddings[index],
     }));
 
-    const { error } = await supabase
+    const { error: dbError } = await supabase
       .from("document_chunks")
       .insert(rowsToInsert);
 
-    if (error) throw error;
+    if (dbError) throw dbError;
 
-    return NextResponse.json({ success: true, count: textChunks.length });
-  } catch (err: unknown) {
-    console.error("PDF processing error:", err);
-
-    const message =
-      err instanceof Error ? err.message : "Ett okänt fel uppstod";
-
+    return NextResponse.json({
+      success: true,
+      message: `PDF indexerad framgångsrikt. ${chunks.length} textsegment skapades.`,
+    });
+  } catch (err) {
+    console.error(err);
     return NextResponse.json(
-      { error: "Något gick fel vid bearbetningen", details: message },
+      { error: "Något gick fel vid bearbetningen av filen" },
       { status: 500 },
     );
   }
