@@ -132,7 +132,7 @@ export default function Home() {
           <CardTitle>2. Ställ frågor om dokumentet</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4 h-100 overflow-y-auto rounded-lg border border-border p-4">
+          <div className="space-y-4 h-[400px] overflow-y-auto rounded-lg border border-border p-4">
             {messages.length === 0 && (
               <p className="text-sm text-muted-foreground">
                 Inga meddelanden än. Ställ en fråga nedan när ditt dokument är
@@ -158,50 +158,42 @@ export default function Home() {
                       : "bg-muted"
                   }`}
                 >
-                  {m.parts ? (
-                    m.parts.map((part, index) => {
-                      if (part.type === "text") {
-                        return (
-                          <p key={index} className="whitespace-pre-wrap">
-                            {part.text}
-                          </p>
-                        );
-                      }
-
-                      if (
-                        part.type === "tool-invocation" &&
-                        part.toolInvocation.toolName === "getSummaryCard" &&
-                        part.toolInvocation.state === "result"
-                      ) {
-                        const { title, bulletPoints } = part.toolInvocation
-                          .result as {
-                          title: string;
-                          bulletPoints: string[];
-                        };
-                        return (
-                          <Card
-                            key={part.toolInvocation.toolCallId}
-                            className="mt-3 text-left"
-                          >
-                            <CardHeader>
-                              <CardTitle className="text-sm">{title}</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <ul className="list-disc ml-5 text-sm space-y-1">
-                                {bulletPoints.map((pt: string, idx: number) => (
-                                  <li key={idx}>{pt}</li>
-                                ))}
-                              </ul>
-                            </CardContent>
-                          </Card>
-                        );
-                      }
-
-                      return null;
-                    })
-                  ) : (
+                  {/* Rendera textinnehåll */}
+                  {m.content && (
                     <p className="whitespace-pre-wrap">{m.content}</p>
                   )}
+
+                  {/* Rendera tool-anrop för v4 (m.toolInvocations) */}
+                  {m.toolInvocations?.map((toolInvocation) => {
+                    const { toolName, toolCallId, state } = toolInvocation;
+
+                    if (toolName === "getSummaryCard" && state === "result") {
+                      const { title, bulletPoints } = toolInvocation.result as {
+                        title: string;
+                        bulletPoints: string[];
+                      };
+
+                      return (
+                        <Card
+                          key={toolCallId}
+                          className="mt-3 text-left text-foreground bg-card"
+                        >
+                          <CardHeader className="p-3 pb-1">
+                            <CardTitle className="text-sm">{title}</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-3 pt-1">
+                            <ul className="list-disc ml-5 text-sm space-y-1">
+                              {bulletPoints.map((pt: string, idx: number) => (
+                                <li key={idx}>{pt}</li>
+                              ))}
+                            </ul>
+                          </CardContent>
+                        </Card>
+                      );
+                    }
+
+                    return null;
+                  })}
                 </div>
               </div>
             ))}
