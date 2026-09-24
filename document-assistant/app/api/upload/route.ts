@@ -3,7 +3,6 @@ import { embedMany } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
 
-// @ts-expect-error - pdf-parse/lib/pdf-parse.js saknar understigsdeklarationer i @types/pdf-parse
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
 export const runtime = "nodejs";
