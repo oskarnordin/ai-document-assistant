@@ -24,12 +24,17 @@ This is why the AI can answer questions about a document it was never trained on
 flowchart LR
     U["🧑 User (Browser)"] -->|"1. Upload PDF"| UP["/api/upload"]
     U -->|"4. Ask a question"| CH["/api/chat"]
+npm test -- --run  # run the Vitest suite once
+
+
+## 12. Test checklist for changes
 
     UP -->|"2. Extract text + split into chunks"| PARSE["pdf-parse"]
     UP -->|"3. Turn chunks into embeddings"| EMB1["OpenAI Embeddings API"]
     UP -->|"4. Save chunks + embeddings"| DB[("Supabase\n(Postgres + pgvector)")]
 
     CH -->|"5. Turn question into embedding"| EMB2["OpenAI Embeddings API"]
+
     CH -->|"6. Find similar chunks (match_chunks)"| DB
     CH -->|"7. Send question + matched chunks"| LLM["OpenAI GPT-4o"]
     LLM -->|"8. Streamed answer"| CH
@@ -38,7 +43,7 @@ flowchart LR
 
 - **Frontend**: one page (`app/page.tsx`) — upload box + chat window.
 - **Backend**: two Next.js API routes — `/api/upload` and `/api/chat`.
-- **Database**: Supabase (hosted Postgres) with the `pgvector` extension, used as a _vector store_.
+## 13. Key concepts explained (glossary)
 - **AI provider**: OpenAI, for both embeddings and the chat model.
 
 ---

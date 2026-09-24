@@ -4,6 +4,7 @@ import { openai } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
 
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
+import { chunkText } from "../../../lib/chunking";
 
 export const runtime = "nodejs";
 
@@ -11,19 +12,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
-
-function chunkText(text: string, chunkSize = 1000, overlap = 200): string[] {
-  const chunks: string[] = [];
-  let start = 0;
-
-  while (start < text.length) {
-    const end = start + chunkSize;
-    chunks.push(text.slice(start, end));
-    start += chunkSize - overlap;
-  }
-
-  return chunks;
-}
 
 export async function POST(req: NextRequest) {
   try {

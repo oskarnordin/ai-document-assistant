@@ -24,4 +24,37 @@ describe("chunkText utility", () => {
     expect(result[0]).toBe("En två tre");
     expect(result[1]).toContain("tre");
   });
+
+  it("ska normalisera whitespace före chunking", () => {
+    expect(
+      chunkText("  ett\n\n två\t tre  ", { maxChunkSize: 20, overlap: 0 }),
+    ).toEqual(["ett två tre"]);
+  });
+
+  it("ska skapa flera chunks utan att tappa ord", () => {
+    expect(
+      chunkText("ett två tre fyra fem sex", { maxChunkSize: 7, overlap: 0 }),
+    ).toEqual(["ett två", "tre", "fyra", "fem sex"]);
+  });
+
+  it("ska behålla ett enskilt ord som är längre än maxstorleken", () => {
+    expect(chunkText("långtord här", { maxChunkSize: 4, overlap: 0 })).toEqual([
+      "långtord",
+      "här",
+    ]);
+  });
+
+  it("ska returnera tom array för ogiltig maxstorlek", () => {
+    expect(chunkText("text", { maxChunkSize: 0 })).toEqual([]);
+    expect(chunkText("text", { maxChunkSize: -1 })).toEqual([]);
+  });
+
+  it("ska avvisa overlap som inte lämnar någon framdrift", () => {
+    expect(() => chunkText("text", { maxChunkSize: 10, overlap: 10 })).toThrow(
+      "Overlap måste vara mindre än maxChunkSize",
+    );
+    expect(() => chunkText("text", { maxChunkSize: 10, overlap: 11 })).toThrow(
+      "Overlap måste vara mindre än maxChunkSize",
+    );
+  });
 });
