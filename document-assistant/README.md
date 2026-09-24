@@ -43,7 +43,9 @@ npm test -- --run  # run the Vitest suite once
 
 - **Frontend**: one page (`app/page.tsx`) — upload box + chat window.
 - **Backend**: two Next.js API routes — `/api/upload` and `/api/chat`.
+
 ## 13. Key concepts explained (glossary)
+
 - **AI provider**: OpenAI, for both embeddings and the chat model.
 
 ---
@@ -116,7 +118,25 @@ Explained simply:
 - **Embedding** (`embedMany`): each chunk of text is sent to OpenAI's `text-embedding-3-small` model, which returns a **vector** — a list of a few hundred numbers that mathematically represents the _meaning_ of that text. Similar meanings → similar numbers.
 - **Storing**: each `{ content, embedding }` pair is inserted as a row into a Supabase table called `document_chunks`.
 
-> ⚠️ Note: every new upload just **adds more rows** — nothing deletes old chunks from previous uploads. If you upload multiple PDFs, all their chunks live together in the same table and can all be searched at once.
+> Uploads are tracked as documents. Each chunk belongs to one `document_id`, and deleting a document also deletes its chunks through the database foreign key.
+
+### Document lifecycle
+
+Sprint 2 adds a `documents` table and these statuses:
+
+- `processing`: the PDF is being parsed and indexed.
+- `ready`: the document can be selected for chat.
+- `failed`: indexing stopped; the error is shown safely without exposing database details.
+
+Apply `supabase/migrations/20260924120000_document_lifecycle.sql` before using the new upload and document APIs. The migration removes old chunks that have no reliable document owner, because assigning them to an arbitrary document could mix unrelated PDFs.
+
+The document API is:
+
+- `GET /api/documents` — list documents and chunk counts.
+- `PATCH /api/documents/:id` — rename a document without re-indexing it.
+- `DELETE /api/documents/:id` — remove the document and its chunks.
+
+Chat requests must include the selected `documentId`, so retrieval is limited to that document.
 
 ---
 

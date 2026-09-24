@@ -6,6 +6,11 @@ const mocks = vi.hoisted(() => ({
   embedMany: vi.fn(),
   insert: vi.fn(),
   from: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  select: vi.fn(),
+  single: vi.fn(),
+  eq: vi.fn(),
 }));
 
 vi.mock("pdf-parse/lib/pdf-parse.js", () => ({
@@ -35,7 +40,21 @@ function createRequest(file?: File) {
 describe("POST /api/upload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.from.mockReturnValue({ insert: mocks.insert });
+    mocks.single.mockResolvedValue({ data: { id: "document-1" }, error: null });
+    mocks.select.mockReturnValue({ single: mocks.single });
+    mocks.eq.mockResolvedValue({ error: null });
+    mocks.update.mockReturnValue({ eq: mocks.eq });
+    mocks.delete.mockReturnValue({ eq: mocks.eq });
+    mocks.from.mockImplementation((table: string) => {
+      if (table === "documents") {
+        return {
+          insert: vi.fn().mockReturnValue({ select: mocks.select }),
+          update: mocks.update,
+        };
+      }
+
+      return { insert: mocks.insert, delete: mocks.delete };
+    });
     mocks.pdfParse.mockResolvedValue({ text: "" });
     mocks.embedMany.mockResolvedValue({ embeddings: [[0.1, 0.2, 0.3]] });
     mocks.insert.mockResolvedValue({ error: null });
@@ -54,6 +73,7 @@ describe("POST /api/upload", () => {
     expect(res.status).toBe(200);
     expect(json).toEqual({
       success: true,
+      documentId: "document-1",
       message: "PDF indexerad framgångsrikt. 1 textsegment skapades.",
     });
     expect(mocks.pdfParse).toHaveBeenCalledTimes(1);
@@ -65,16 +85,26 @@ describe("POST /api/upload", () => {
     );
     expect(mocks.from).toHaveBeenCalledWith("document_chunks");
     expect(mocks.insert).toHaveBeenCalledWith([
-      { content: pdfText, embedding: [0.1, 0.2, 0.3] },
+      {
+        document_id: "document-1",
+        chunk_index: 0,
+        content: pdfText,
+        embedding: [0.1, 0.2, 0.3],
+      },
     ]);
+    expect(mocks.update).toHaveBeenCalledWith({
+      status: "ready",
+      error_message: null,
+    });
   });
 
   it("uses the shared chunking rules for multiple chunks", async () => {
     const words = Array.from({ length: 101 }, (_, index) => `ord${index}`);
     const pdfText = words.join(" ");
-    const embeddings = [[0.1], [0.2], [0.3]];
     mocks.pdfParse.mockResolvedValue({ text: pdfText });
-    mocks.embedMany.mockResolvedValue({ embeddings });
+    mocks.embedMany.mockImplementation(async ({ values }: { values: string[] }) => ({
+      embeddings: values.map((_, index) => [index / 10]),
+    }));
 
     const res = await POST(
       createRequest(
@@ -84,10 +114,13 @@ describe("POST /api/upload", () => {
 
     expect(res.status).toBe(200);
     const values = mocks.embedMany.mock.calls[0][0].values as string[];
+    const embeddings = values.map((_, index) => [index / 10]);
     expect(values.length).toBeGreaterThan(1);
     expect(values[0]).toContain("ord0");
     expect(mocks.insert).toHaveBeenCalledWith(
       values.map((content, index) => ({
+        document_id: "document-1",
+        chunk_index: index,
         content,
         embedding: embeddings[index],
       })),
@@ -113,9 +146,13 @@ describe("POST /api/upload", () => {
     );
     const json = await res.json();
 
-    expect(res.status).toBe(400);
-    expect(json.error).toBe("Kunde inte extrahera någon text från PDF:en");
+    expect(res.status).toBe(422);
+    expect(json.error).toBe("PDF:en innehåller ingen maskinläsbar text");
     expect(mocks.embedMany).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledWith({
+      status: "failed",
+      error_message: "PDF:en innehåller ingen maskinläsbar text",
+    });
   });
 
   it.each([

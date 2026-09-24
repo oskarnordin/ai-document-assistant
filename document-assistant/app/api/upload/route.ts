@@ -7,6 +7,7 @@ import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { chunkText } from "../../../lib/chunking";
 
 export const runtime = "nodejs";
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,6 +15,8 @@ const supabase = createClient(
 );
 
 export async function POST(req: Request) {
+  let documentId: string | null = null;
+
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -25,6 +28,44 @@ export async function POST(req: Request) {
       );
     }
 
+    if (
+      file.type !== "application/pdf" ||
+      !file.name.toLowerCase().endsWith(".pdf")
+    ) {
+      return NextResponse.json(
+        { error: "Filen måste vara en PDF" },
+        { status: 400 },
+      );
+    }
+
+    if (file.size === 0) {
+      return NextResponse.json({ error: "PDF-filen är tom" }, { status: 400 });
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: "PDF-filen får vara högst 10 MB" },
+        { status: 413 },
+      );
+    }
+
+    const { data: document, error: documentError } = await supabase
+      .from("documents")
+      .insert({
+        filename: file.name,
+        mime_type: file.type,
+        file_size: file.size,
+        status: "processing",
+      })
+      .select("id")
+      .single();
+
+    if (documentError || !document?.id) {
+      throw documentError ?? new Error("Kunde inte skapa dokumentet");
+    }
+
+    documentId = document.id;
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -33,9 +74,17 @@ export async function POST(req: Request) {
     const fullText = pdfData.text;
 
     if (!fullText || fullText.trim().length === 0) {
+      await supabase
+        .from("documents")
+        .update({
+          status: "failed",
+          error_message: "PDF:en innehåller ingen maskinläsbar text",
+        })
+        .eq("id", documentId);
+
       return NextResponse.json(
-        { error: "Kunde inte extrahera någon text från PDF:en" },
-        { status: 400 },
+        { error: "PDF:en innehåller ingen maskinläsbar text" },
+        { status: 422 },
       );
     }
 
@@ -46,7 +95,13 @@ export async function POST(req: Request) {
       values: chunks,
     });
 
+    if (embeddings.length !== chunks.length) {
+      throw new Error("Antalet embeddings matchar inte antalet textsegment");
+    }
+
     const rowsToInsert = chunks.map((content, index) => ({
+      document_id: documentId,
+      chunk_index: index,
       content,
       embedding: embeddings[index],
     }));
@@ -57,12 +112,35 @@ export async function POST(req: Request) {
 
     if (dbError) throw dbError;
 
+    const { error: statusError } = await supabase
+      .from("documents")
+      .update({ status: "ready", error_message: null })
+      .eq("id", documentId);
+
+    if (statusError) throw statusError;
+
     return NextResponse.json({
       success: true,
+      documentId,
       message: `PDF indexerad framgångsrikt. ${chunks.length} textsegment skapades.`,
     });
   } catch (err) {
     console.error(err);
+
+    if (documentId) {
+      await supabase
+        .from("document_chunks")
+        .delete()
+        .eq("document_id", documentId);
+      await supabase
+        .from("documents")
+        .update({
+          status: "failed",
+          error_message: "Indexeringen misslyckades",
+        })
+        .eq("id", documentId);
+    }
+
     return NextResponse.json(
       { error: "Något gick fel vid bearbetningen av filen" },
       { status: 500 },

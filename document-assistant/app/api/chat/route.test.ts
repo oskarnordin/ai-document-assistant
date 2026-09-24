@@ -26,7 +26,10 @@ function createRequest(messages: unknown[]) {
   return new Request("http://localhost/api/chat", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({
+      messages,
+      documentId: "11111111-1111-4111-8111-111111111111",
+    }),
   });
 }
 
@@ -58,6 +61,23 @@ describe("POST /api/chat", () => {
     expect(mocks.embed).not.toHaveBeenCalled();
   });
 
+  it("returns 400 when no document is selected", async () => {
+    const req = new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "Fråga" }] }),
+    });
+
+    const res = await POST(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toBe(
+      "Välj ett giltigt dokument innan du ställer en fråga",
+    );
+    expect(mocks.embed).not.toHaveBeenCalled();
+  });
+
   it("embeds the last string message and streams with retrieved context", async () => {
     const messages = [{ role: "user", content: "Vad står i dokumentet?" }];
 
@@ -72,6 +92,7 @@ describe("POST /api/chat", () => {
       query_embedding: [0.1, 0.2],
       match_threshold: 0.3,
       match_count: 4,
+      filter_document_id: "11111111-1111-4111-8111-111111111111",
     });
     expect(mocks.convertToCoreMessages).toHaveBeenCalledWith(messages);
     expect(mocks.streamText).toHaveBeenCalledWith(

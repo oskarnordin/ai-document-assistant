@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertCircle,
   Bot,
@@ -28,9 +28,30 @@ export default function Home() {
     api: "/api/chat",
   });
 
+  const [documents, setDocuments] = useState<
+    Array<{
+      id: string;
+      filename: string;
+      status: "processing" | "ready" | "failed";
+      chunk_count: number;
+      created_at: string;
+    }>
+  >([]);
+  const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
   const [uploadOk, setUploadOk] = useState(false);
+
+  const loadDocuments = async () => {
+    const res = await fetch("/api/documents");
+    if (!res.ok) return;
+    const data = await res.json();
+    setDocuments(data.documents ?? []);
+  };
+
+  useEffect(() => {
+    void loadDocuments();
+  }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -52,6 +73,8 @@ export default function Home() {
       const data = await res.json().catch(() => null);
 
       if (res.ok) {
+        if (data?.documentId) setSelectedDocumentId(data.documentId);
+        await loadDocuments();
         setUploadOk(true);
         setUploadStatus("Dokumentet är redo! Du kan ställa frågor nu.");
       } else {
@@ -69,7 +92,35 @@ export default function Home() {
     }
   };
 
+  const renameDocument = async (documentId: string, currentName: string) => {
+    const filename = window.prompt("Nytt filnamn", currentName)?.trim();
+    if (!filename || filename === currentName) return;
+
+    const res = await fetch(`/api/documents/${documentId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ filename }),
+    });
+    if (res.ok) await loadDocuments();
+  };
+
+  const deleteDocument = async (documentId: string) => {
+    if (!window.confirm("Ta bort dokumentet och dess indexerade text?")) return;
+
+    const res = await fetch(`/api/documents/${documentId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      if (selectedDocumentId === documentId) setSelectedDocumentId("");
+      await loadDocuments();
+    }
+  };
+
+  const selectedDocument = documents.find(
+    (document) => document.id === selectedDocumentId,
+  );
   const isBusy = status !== "ready";
+  const canChat = selectedDocument?.status === "ready";
 
   return (
     <main className="max-w-3xl mx-auto w-full p-6 space-y-6">
@@ -123,6 +174,64 @@ export default function Home() {
               )}
               <span>{uploadStatus}</span>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Dokument</CardTitle>
+          <CardDescription>
+            Välj vilket färdigt dokument chatten ska använda.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {documents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Inga dokument uppladdade.
+            </p>
+          ) : (
+            documents.map((document) => (
+              <div
+                key={document.id}
+                className={`flex items-center gap-2 rounded-lg border p-3 ${
+                  selectedDocumentId === document.id
+                    ? "border-primary"
+                    : "border-border"
+                }`}
+              >
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => setSelectedDocumentId(document.id)}
+                >
+                  <span className="block truncate text-sm font-medium">
+                    {document.filename}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {document.status} · {document.chunk_count} textsegment
+                  </span>
+                </button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    void renameDocument(document.id, document.filename)
+                  }
+                >
+                  Byt namn
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => void deleteDocument(document.id)}
+                >
+                  Ta bort
+                </Button>
+              </div>
+            ))
           )}
         </CardContent>
       </Card>
@@ -199,14 +308,22 @@ export default function Home() {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+          <form
+            onSubmit={(event) =>
+              handleSubmit(event, { body: { documentId: selectedDocumentId } })
+            }
+            className="mt-4 flex gap-2"
+          >
             <Input
               value={input}
               onChange={handleInputChange}
               placeholder="Fråga något om ditt dokument..."
-              disabled={isBusy}
+              disabled={isBusy || !canChat}
             />
-            <Button type="submit" disabled={isBusy || !input.trim()}>
+            <Button
+              type="submit"
+              disabled={isBusy || !canChat || !input.trim()}
+            >
               {isBusy ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (

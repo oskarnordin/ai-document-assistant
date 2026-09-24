@@ -9,13 +9,29 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+function isValidDocumentId(documentId: unknown): documentId is string {
+  return (
+    typeof documentId === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      documentId,
+    )
+  );
+}
+
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages, documentId } = await req.json();
 
     if (!messages?.length) {
       return NextResponse.json(
         { error: "Inga meddelanden skickades" },
+        { status: 400 },
+      );
+    }
+
+    if (!isValidDocumentId(documentId)) {
+      return NextResponse.json(
+        { error: "Välj ett giltigt dokument innan du ställer en fråga" },
         { status: 400 },
       );
     }
@@ -41,6 +57,7 @@ export async function POST(req: Request) {
         query_embedding: embedding,
         match_threshold: 0.3,
         match_count: 4,
+        filter_document_id: documentId,
       },
     );
 
