@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "../../../../lib/supabase";
+import {
+  createServerSupabaseClient,
+  getAuthenticatedUser,
+} from "../../../../lib/supabase";
 
 function isValidId(id: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -21,6 +24,14 @@ export async function PATCH(
   }
 
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Du måste vara inloggad" },
+        { status: 401 },
+      );
+    }
+
     const supabase = createServerSupabaseClient();
     const body = await req.json();
     const filename =
@@ -37,6 +48,7 @@ export async function PATCH(
       .from("documents")
       .update({ filename })
       .eq("id", id)
+      .eq("user_id", user.id)
       .select(
         "id, filename, mime_type, file_size, status, error_message, created_at, updated_at",
       )
@@ -76,11 +88,20 @@ export async function DELETE(
   }
 
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Du måste vara inloggad" },
+        { status: 401 },
+      );
+    }
+
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
       .from("documents")
       .delete()
       .eq("id", id)
+      .eq("user_id", user.id)
       .select("id")
       .single();
 

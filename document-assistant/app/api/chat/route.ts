@@ -4,7 +4,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ragConfig } from "../../../lib/rag-config";
 import { buildRagSystemPrompt } from "../../../lib/rag-prompt";
-import { createServerSupabaseClient } from "../../../lib/supabase";
+import {
+  createServerSupabaseClient,
+  getAuthenticatedUser,
+} from "../../../lib/supabase";
 
 function isValidDocumentId(documentId: unknown): documentId is string {
   return (
@@ -17,6 +20,14 @@ function isValidDocumentId(documentId: unknown): documentId is string {
 
 export async function POST(req: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Du måste vara inloggad" },
+        { status: 401 },
+      );
+    }
+
     const supabase = createServerSupabaseClient();
     const { messages, documentId } = await req.json();
 
@@ -38,6 +49,7 @@ export async function POST(req: Request) {
       .from("documents")
       .select("status")
       .eq("id", documentId)
+      .eq("user_id", user.id)
       .single();
 
     if (documentError) throw documentError;

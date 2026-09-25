@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   single: vi.fn(),
   rpc: vi.fn(),
   toDataStreamResponse: vi.fn(),
+  getAuthenticatedUser: vi.fn(),
 }));
 
 vi.mock("ai", () => ({
@@ -27,6 +28,13 @@ vi.mock("@supabase/supabase-js", () => ({
   }),
 }));
 
+vi.mock("../../../lib/supabase", async () => {
+  const actual = await vi.importActual<typeof import("../../../lib/supabase")>(
+    "../../../lib/supabase",
+  );
+  return { ...actual, getAuthenticatedUser: mocks.getAuthenticatedUser };
+});
+
 function createRequest(messages: unknown[]) {
   return new Request("http://localhost/api/chat", {
     method: "POST",
@@ -41,13 +49,14 @@ function createRequest(messages: unknown[]) {
 describe("POST /api/chat", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getAuthenticatedUser.mockResolvedValue({ id: "user-1" });
     mocks.embed.mockResolvedValue({ embedding: [0.1, 0.2] });
     mocks.rpc.mockResolvedValue({
       data: [{ content: "Dokumentets innehåll." }],
       error: null,
     });
     mocks.single.mockResolvedValue({ data: { status: "ready" }, error: null });
-    mocks.eq.mockReturnValue({ single: mocks.single });
+    mocks.eq.mockReturnValue({ eq: mocks.eq, single: mocks.single });
     mocks.select.mockReturnValue({ eq: mocks.eq });
     mocks.from.mockReturnValue({ select: mocks.select });
     mocks.convertToCoreMessages.mockResolvedValue([
@@ -59,6 +68,16 @@ describe("POST /api/chat", () => {
     mocks.streamText.mockReturnValue({
       toDataStreamResponse: mocks.toDataStreamResponse,
     });
+  });
+
+  it("returns 401 when the request is not authenticated", async () => {
+    mocks.getAuthenticatedUser.mockResolvedValue(null);
+
+    const res = await POST(createRequest([{ role: "user", content: "Fråga" }]));
+
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe("Du måste vara inloggad");
+    expect(mocks.embed).not.toHaveBeenCalled();
   });
 
   it("returns 400 when no messages are sent", async () => {

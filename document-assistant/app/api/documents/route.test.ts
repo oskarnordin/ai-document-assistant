@@ -5,15 +5,25 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   select: vi.fn(),
   order: vi.fn(),
+  eq: vi.fn(),
+  getAuthenticatedUser: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({ from: mocks.from }),
 }));
 
+vi.mock("../../../lib/supabase", async () => {
+  const actual = await vi.importActual<typeof import("../../../lib/supabase")>(
+    "../../../lib/supabase",
+  );
+  return { ...actual, getAuthenticatedUser: mocks.getAuthenticatedUser };
+});
+
 describe("GET /api/documents", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getAuthenticatedUser.mockResolvedValue({ id: "user-1" });
     mocks.order.mockResolvedValue({
       data: [
         {
@@ -25,7 +35,8 @@ describe("GET /api/documents", () => {
       ],
       error: null,
     });
-    mocks.select.mockReturnValue({ order: mocks.order });
+    mocks.eq.mockReturnValue({ order: mocks.order });
+    mocks.select.mockReturnValue({ eq: mocks.eq });
     mocks.from.mockReturnValue({ select: mocks.select });
   });
 

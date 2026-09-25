@@ -10,11 +10,19 @@ const mocks = vi.hoisted(() => ({
   eq: vi.fn(),
   select: vi.fn(),
   single: vi.fn(),
+  getAuthenticatedUser: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({ from: mocks.from }),
 }));
+
+vi.mock("../../../../lib/supabase", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../../../lib/supabase")
+  >("../../../../lib/supabase");
+  return { ...actual, getAuthenticatedUser: mocks.getAuthenticatedUser };
+});
 
 function params() {
   return { params: Promise.resolve({ id: documentId }) };
@@ -23,12 +31,13 @@ function params() {
 describe("/api/documents/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getAuthenticatedUser.mockResolvedValue({ id: "user-1" });
     mocks.single.mockResolvedValue({
       data: { id: documentId, filename: "renamed.pdf", status: "ready" },
       error: null,
     });
     mocks.select.mockReturnValue({ single: mocks.single });
-    mocks.eq.mockReturnValue({ select: mocks.select });
+    mocks.eq.mockReturnValue({ eq: mocks.eq, select: mocks.select });
     mocks.update.mockReturnValue({ eq: mocks.eq });
     mocks.delete.mockReturnValue({ eq: mocks.eq });
     mocks.from.mockReturnValue({
