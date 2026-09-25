@@ -2,7 +2,7 @@
 
 @layer base {
   :root {
-    --background: #fcfbf5;
+    --background: #e8e6df;
     --foreground: #211f36;
     --card: #fefdfa;
     --card-foreground: #211f36;
@@ -21,10 +21,10 @@
     --border: #c7c5d1;
     --input: #c7c5d1;
     --ring: #3000ce;
-    --glass-panel: #fefdfac7;
-    --glass-surface: #fcfbf594;
-    --glass-highlight: #ffffffb8;
-    --glass-shadow: #2f2b461f;
+    --glass-panel: #ffffff;
+    --glass-surface: #f8f8f5;
+    --glass-highlight: #ffffff;
+    --glass-shadow: #2f2b4633;
     --radius: 0.75rem;
   }
 }

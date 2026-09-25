@@ -1,7 +1,6 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
@@ -154,15 +153,8 @@ export default function Home() {
   return (
     <main className="mission-shell min-h-screen w-full">
       <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-8 lg:px-12">
-        <header className="reveal flex items-center justify-between border-b border-border/60 pb-5">
+        <header className="reveal flex items-center justify-between /60 pb-5">
           <div className="flex items-center gap-3">
-            <Image
-              src="/logo.png"
-              alt="Document Assistant logo"
-              width={80}
-              height={80}
-              className="size-20 object-contain"
-            />
             <div>
               <p className="eyebrow">Your document companion</p>
               <h1 className="text-lg font-semibold tracking-tight sm:text-xl">
@@ -184,7 +176,7 @@ export default function Home() {
           </div>
         </header>
 
-        <section className="reveal reveal-delay-1 grid gap-8 border-b border-border/60 py-12 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
+        <section className="reveal reveal-delay-1 grid gap-8/60 py-12 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
           <div>
             <p className="eyebrow mb-4">A calmer way to explore your files</p>
             <h2 className="max-w-3xl text-4xl font-semibold leading-[1.05] tracking-[-0.03em] sm:text-6xl">
@@ -199,7 +191,7 @@ export default function Home() {
 
         <section className="grid gap-6 py-8 lg:grid-cols-[0.8fr_1.2fr]">
           <Card className="glass-panel friendly-hover reveal reveal-delay-2 rounded-3xl ring-0">
-            <CardHeader className="border-b border-border pb-4">
+            <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="eyebrow mb-2">Ingest</p>
@@ -257,7 +249,7 @@ export default function Home() {
           </Card>
 
           <Card className="glass-panel friendly-hover reveal reveal-delay-3 rounded-3xl ring-0">
-            <CardHeader className="border-b border-border pb-4">
+            <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="eyebrow mb-2">Sources</p>
@@ -325,11 +317,13 @@ export default function Home() {
 
         <section className="pb-10">
           <Card className="glass-panel reveal reveal-delay-4 rounded-3xl ring-0">
-            <CardHeader className="border-b border-border pb-4">
+            <CardHeader>
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="eyebrow mb-2">Analysis console</p>
-                  <CardTitle className="text-xl">Ask the evidence</CardTitle>
+                  <CardTitle className="text-xl">
+                    Ask about the PDF-file
+                  </CardTitle>
                 </div>
                 <span className="mono-meta hidden sm:block">
                   {canChat ? "source connected" : "select a ready source"}
@@ -403,7 +397,7 @@ export default function Home() {
                     body: { documentId: selectedDocumentId },
                   })
                 }
-                className="mt-4 flex gap-2 border-t border-border pt-4"
+                className="mt-4 flex gap-2 pt-4"
               >
                 <Input
                   value={input}
@@ -429,7 +423,7 @@ export default function Home() {
           </Card>
         </section>
 
-        <footer className="flex justify-between border-t border-border py-4">
+        <footer className="flex justify-between py-4">
           <span className="mono-meta">
             Document Assistant / retrieval system
           </span>

@@ -27,7 +27,9 @@ export function AuthForm({ onAuthenticated }: { onAuthenticated: () => void }) {
       if (result.error) throw result.error;
 
       if (isSignUp && !result.data.session) {
-        setMessage("Kontot skapades. Kontrollera din e-post innan du loggar in.");
+        setMessage(
+          "Kontot skapades. Kontrollera din e-post innan du loggar in.",
+        );
       } else {
         onAuthenticated();
       }
@@ -93,16 +95,28 @@ export function AuthForm({ onAuthenticated }: { onAuthenticated: () => void }) {
                   minLength={6}
                   required
                 />
-                <Button type="submit" disabled={isSubmitting} className="w-full">
-                  {isSubmitting ? "Arbetar..." : isSignUp ? "Skapa konto" : "Logga in"}
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full"
+                >
+                  {isSubmitting
+                    ? "Arbetar..."
+                    : isSignUp
+                      ? "Skapa konto"
+                      : "Logga in"}
                 </Button>
-                {message && <p className="text-sm text-muted-foreground">{message}</p>}
+                {message && (
+                  <p className="text-sm text-muted-foreground">{message}</p>
+                )}
                 <button
                   type="button"
-                  className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                  className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
                   onClick={() => setIsSignUp((value) => !value)}
                 >
-                  {isSignUp ? "Jag har redan ett konto" : "Skapa ett nytt konto"}
+                  {isSignUp
+                    ? "Jag har redan ett konto"
+                    : "Skapa ett nytt konto"}
                 </button>
               </form>
             </CardContent>
