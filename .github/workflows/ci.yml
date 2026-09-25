@@ -1,6 +1,8 @@
 name: Continuous Integration
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -34,6 +36,9 @@ jobs:
 
       - name: Run Vitest Unit Tests
         run: npm test -- --run
+
+      - name: Run Deterministic RAG Evaluation
+        run: npm run evaluate
 
       - name: Build application
         run: npm run build

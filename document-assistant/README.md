@@ -278,7 +278,31 @@ Other scripts:
 npm run build     # production build
 npm run start     # run the production build
 npm run lint      # run ESLint
+npm run evaluate   # run deterministic RAG quality evaluation
 ```
+
+## Sprint 3: RAG quality and evaluation
+
+The baseline experiment is defined in `lib/rag-config.ts`:
+
+| Parameter | Baseline |
+| --- | --- |
+| Chunk size | 500 characters |
+| Chunk overlap | 50 characters |
+| Embedding model | `text-embedding-3-small` |
+| Retrieval threshold | 0.3 |
+| Retrieved chunks | 4 |
+| Chat model | `gpt-4o` |
+
+Each uploaded document stores the indexing configuration version, chunk size,
+overlap, and embedding model in the database. This makes re-indexing runs
+comparable without changing the production baseline implicitly.
+
+The provider-free evaluation fixtures in `evaluation/` measure retrieval
+hit@k, recall@k, reciprocal rank, empty results, false positives, grounded
+facts, answer correctness, and refusal for questions without evidence. Run
+them with `npm run evaluate`. Live model judging is intentionally not part of
+normal CI and should be added only as a separately gated experiment.
 
 ---
 

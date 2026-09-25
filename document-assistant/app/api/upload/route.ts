@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { chunkText } from "../../../lib/chunking";
+import { ragConfig } from "../../../lib/rag-config";
 
 export const runtime = "nodejs";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -56,6 +57,10 @@ export async function POST(req: Request) {
         mime_type: file.type,
         file_size: file.size,
         status: "processing",
+        rag_config_version: ragConfig.version,
+        chunk_max_size: ragConfig.chunking.maxChunkSize,
+        chunk_overlap: ragConfig.chunking.overlap,
+        embedding_model: ragConfig.embeddingModel,
       })
       .select("id")
       .single();
@@ -88,10 +93,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const chunks = chunkText(fullText);
+    const chunks = chunkText(fullText, ragConfig.chunking);
 
     const { embeddings } = await embedMany({
-      model: openai.embedding("text-embedding-3-small"),
+      model: openai.embedding(ragConfig.embeddingModel),
       values: chunks,
     });
 

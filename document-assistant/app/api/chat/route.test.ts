@@ -5,6 +5,10 @@ const mocks = vi.hoisted(() => ({
   embed: vi.fn(),
   streamText: vi.fn(),
   convertToCoreMessages: vi.fn(),
+  from: vi.fn(),
+  select: vi.fn(),
+  eq: vi.fn(),
+  single: vi.fn(),
   rpc: vi.fn(),
   toDataStreamResponse: vi.fn(),
 }));
@@ -18,6 +22,7 @@ vi.mock("ai", () => ({
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
+    from: mocks.from,
     rpc: mocks.rpc,
   }),
 }));
@@ -41,6 +46,10 @@ describe("POST /api/chat", () => {
       data: [{ content: "Dokumentets innehåll." }],
       error: null,
     });
+    mocks.single.mockResolvedValue({ data: { status: "ready" }, error: null });
+    mocks.eq.mockReturnValue({ single: mocks.single });
+    mocks.select.mockReturnValue({ eq: mocks.eq });
+    mocks.from.mockReturnValue({ select: mocks.select });
     mocks.convertToCoreMessages.mockResolvedValue([
       { role: "user", content: "Fråga" },
     ]);
@@ -94,6 +103,7 @@ describe("POST /api/chat", () => {
       match_count: 4,
       filter_document_id: "11111111-1111-4111-8111-111111111111",
     });
+    expect(mocks.from).toHaveBeenCalledWith("documents");
     expect(mocks.convertToCoreMessages).toHaveBeenCalledWith(messages);
     expect(mocks.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -102,6 +112,20 @@ describe("POST /api/chat", () => {
       }),
     );
     expect(mocks.toDataStreamResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 409 when the selected document is not ready", async () => {
+    mocks.single.mockResolvedValue({
+      data: { status: "processing" },
+      error: null,
+    });
+
+    const res = await POST(createRequest([{ role: "user", content: "Fråga" }]));
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.error).toBe("Dokumentet är inte redo för frågor ännu");
+    expect(mocks.embed).not.toHaveBeenCalled();
   });
 
   it("extracts text from parts in the last message", async () => {

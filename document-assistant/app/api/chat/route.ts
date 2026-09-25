@@ -3,6 +3,8 @@ import { openai } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { ragConfig } from "../../../lib/rag-config";
+import { buildRagSystemPrompt } from "../../../lib/rag-prompt";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,6 +38,26 @@ export async function POST(req: Request) {
       );
     }
 
+    const { data: document, error: documentError } = await supabase
+      .from("documents")
+      .select("status")
+      .eq("id", documentId)
+      .single();
+
+    if (documentError) throw documentError;
+    if (!document) {
+      return NextResponse.json(
+        { error: "Dokumentet kunde inte hittas" },
+        { status: 404 },
+      );
+    }
+    if (document.status !== "ready") {
+      return NextResponse.json(
+        { error: "Dokumentet är inte redo för frågor ännu" },
+        { status: 409 },
+      );
+    }
+
     const lastMessage = messages[messages.length - 1];
 
     const lastUserMessage =
@@ -47,7 +69,7 @@ export async function POST(req: Request) {
             .join("") || "";
 
     const { embedding } = await embed({
-      model: openai.embedding("text-embedding-3-small"),
+      model: openai.embedding(ragConfig.embeddingModel),
       value: lastUserMessage,
     });
 
@@ -55,8 +77,8 @@ export async function POST(req: Request) {
       "match_chunks",
       {
         query_embedding: embedding,
-        match_threshold: 0.3,
-        match_count: 4,
+        match_threshold: ragConfig.retrieval.matchThreshold,
+        match_count: ragConfig.retrieval.matchCount,
         filter_document_id: documentId,
       },
     );
@@ -68,12 +90,8 @@ export async function POST(req: Request) {
       : "";
 
     const result = streamText({
-      model: openai("gpt-4o"),
-      system: `Du är en hjälpsam dokumentassistent. Svara enbart på användarens fråga baserat på följande kontext från dokumentet:
-
-${context}
-
-Om svaret inte finns i kontexten, säg att informationen saknas i dokumentet.`,
+      model: openai(ragConfig.chatModel),
+      system: buildRagSystemPrompt(context, ragConfig.promptVariant),
       messages: await convertToCoreMessages(messages),
       tools: {
         getSummaryCard: tool({
