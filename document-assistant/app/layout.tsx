@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-const roboto = Roboto({
-  weight: ["400", "500", "700"],
+const spaceGrotesk = Space_Grotesk({
+  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
   display: "swap",
+});
+const ibmPlexMono = IBM_Plex_Mono({
+  weight: ["400", "500"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
@@ -19,8 +25,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="sv" className={`${roboto.className} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-muted/40">{children}</body>
+    <html
+      lang="sv"
+      className={`${spaceGrotesk.className} ${ibmPlexMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col bg-background">{children}</body>
     </html>
   );
 }

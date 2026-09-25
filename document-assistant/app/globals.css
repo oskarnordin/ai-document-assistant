@@ -2,57 +2,157 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --background: #fcfbf5;
+    --foreground: #211f36;
+    --card: #fefdfa;
+    --card-foreground: #211f36;
+    --popover: #fefdfa;
+    --popover-foreground: #211f36;
+    --primary: #3000ce;
+    --primary-foreground: #ffffff;
+    --secondary: #b9e3e9;
+    --secondary-foreground: #211f36;
+    --muted: #f0eee5;
+    --muted-foreground: #686678;
+    --accent: #ed7058;
+    --accent-foreground: #211f36;
+    --destructive: #cf4435;
+    --destructive-foreground: #ffffff;
+    --border: #c7c5d1;
+    --input: #c7c5d1;
+    --ring: #3000ce;
+    --glass-panel: #fefdfac7;
+    --glass-surface: #fcfbf594;
+    --glass-highlight: #ffffffb8;
+    --glass-shadow: #2f2b461f;
+    --radius: 0.75rem;
   }
 }
 
 @layer base {
   * {
-    border-color: hsl(var(--border));
+    border-color: var(--border);
   }
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+    background-color: var(--background);
+    color: var(--foreground);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .reveal {
+    animation: reveal-up 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .reveal-delay-1 {
+    animation-delay: 140ms;
+  }
+
+  .reveal-delay-2 {
+    animation-delay: 280ms;
+  }
+
+  .reveal-delay-3 {
+    animation-delay: 420ms;
+  }
+
+  .reveal-delay-4 {
+    animation-delay: 560ms;
+  }
+
+  .friendly-hover {
+    transition:
+      transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 500ms ease,
+      background-color 500ms ease;
+  }
+
+  .friendly-hover:hover {
+    transform: translateY(-3px);
+  }
+
+  .upload-hover {
+    transition:
+      transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 500ms ease;
+  }
+
+  .upload-hover:hover {
+    transform: translateY(-2px);
+  }
+
+  .upload-hover:hover svg {
+    transform: translateY(-4px);
+  }
+
+  .upload-hover svg {
+    transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .mission-shell {
+    background-color: var(--background);
+  }
+
+  .glass-panel {
+    background: var(--glass-panel);
+    backdrop-filter: blur(18px) saturate(125%);
+    box-shadow:
+      0 24px 70px var(--glass-shadow),
+      inset 0 1px var(--glass-highlight);
+  }
+
+  .glass-surface {
+    background: var(--glass-surface);
+    backdrop-filter: blur(14px) saturate(120%);
+    box-shadow: inset 0 1px var(--glass-highlight);
+  }
+
+  .eyebrow {
+    color: var(--primary);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .mono-meta {
+    color: var(--muted-foreground);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .friendly-accent {
+    background-color: var(--secondary);
+  }
+
+  .friendly-coral {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
   }
 }
