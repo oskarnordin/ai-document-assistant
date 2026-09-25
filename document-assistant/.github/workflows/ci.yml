@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: document-assistant/package-lock.json
+
+      - name: Install dependencies
+        working-directory: document-assistant
+        run: npm ci
+
+      - name: Run lint
+        working-directory: document-assistant
+        run: npm run lint
+
+      - name: Run tests
+        working-directory: document-assistant
+        run: npm test -- --run
+
+      - name: Build application
+        working-directory: document-assistant
+        run: npm run build
