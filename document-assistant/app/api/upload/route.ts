@@ -1,24 +1,21 @@
 import { NextResponse } from "next/server";
 import { embedMany } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { createClient } from "@supabase/supabase-js";
 
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { chunkText } from "../../../lib/chunking";
 import { ragConfig } from "../../../lib/rag-config";
+import { createServerSupabaseClient } from "../../../lib/supabase";
 
 export const runtime = "nodejs";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
 export async function POST(req: Request) {
   let documentId: string | null = null;
+  let supabase: ReturnType<typeof createServerSupabaseClient> | null = null;
 
   try {
+    supabase = createServerSupabaseClient();
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
@@ -132,7 +129,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error(err);
 
-    if (documentId) {
+    if (documentId && supabase) {
       await supabase
         .from("document_chunks")
         .delete()
