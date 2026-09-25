@@ -26,9 +26,20 @@ alter table document_chunks
   alter column document_id set not null,
   alter column chunk_index set not null;
 
-alter table document_chunks
-  add constraint document_chunks_document_id_fkey
-  foreign key (document_id) references documents(id) on delete cascade;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'document_chunks_document_id_fkey'
+      and conrelid = 'document_chunks'::regclass
+  ) then
+    alter table document_chunks
+      add constraint document_chunks_document_id_fkey
+      foreign key (document_id) references documents(id) on delete cascade;
+  end if;
+end;
+$$;
 
 create index if not exists document_chunks_document_id_idx
   on document_chunks(document_id);
