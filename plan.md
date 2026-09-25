@@ -145,8 +145,14 @@ Lärandemål:
 
 Status:
 
-- Nästa steg efter avslutad Sprint 3
-- Börja med upload-säkerhet, åtkomstkontroll, loggning och CI/CD
+- Påbörjad
+- Upload-endpointen kontrollerar filtyp, filändelse, filstorlek och PDF-signatur
+- CI kör install, lint, tester och production build via `.github/workflows/ci.yml`
+- Supabase Auth med e-post/lösenord, cookie-session och login/logout finns implementerat
+- API-routes kräver inloggning och filtrerar dokument på `user_id`
+- RLS-migration finns i `supabase/migrations/20260925100000_document_ownership.sql`
+- Ownership-migrationen är applicerad på remote-databasen
+- Kvar: verifiera login och dokumentisolering med två testkonton, konfigurera `NEXT_PUBLIC_SUPABASE_ANON_KEY`, rate limiting, central loggning/monitoring och verifierad produktionsdeploy
 
 ---
 
@@ -157,7 +163,7 @@ Din valda ordning är:
 1. Sprint 1 — Testing & QA — avslutad
 2. Sprint 2 — App reliability & document management — avslutad
 3. Sprint 3 — RAG quality & AI evaluation — slutför riktiga experiment
-4. Sprint 5 — Security & production readiness
+4. Sprint 5 — Security & production readiness — fortsätt med åtkomstkontroll och observability
 
 Sprint 4 hoppas över tills vidare.
 
@@ -177,5 +183,6 @@ Du kan tänka så här:
 
 - Klart: stabila tester och robust dokumentflöde
 - Nu: kör och dokumentera RAG-experiment
-- Därefter: säkra och skala produkten
+- Påbörjat: upload-säkerhet, CI och användarautentisering
+- Kvar: verifiera dokumentisolering med riktiga användare, rate limiting, loggning, monitoring och produktionsdeploy
 - Senare: återkom till tillgänglighet och UX
