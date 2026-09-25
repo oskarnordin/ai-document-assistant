@@ -102,9 +102,11 @@ describe("POST /api/upload", () => {
     const words = Array.from({ length: 101 }, (_, index) => `ord${index}`);
     const pdfText = words.join(" ");
     mocks.pdfParse.mockResolvedValue({ text: pdfText });
-    mocks.embedMany.mockImplementation(async ({ values }: { values: string[] }) => ({
-      embeddings: values.map((_, index) => [index / 10]),
-    }));
+    mocks.embedMany.mockImplementation(
+      async ({ values }: { values: string[] }) => ({
+        embeddings: values.map((_, index) => [index / 10]),
+      }),
+    );
 
     const res = await POST(
       createRequest(
@@ -134,6 +136,50 @@ describe("POST /api/upload", () => {
     expect(res.status).toBe(400);
     expect(json.error).toBe("Ingen fil skickades");
     expect(mocks.pdfParse).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "wrong MIME type",
+      new File(["text"], "notes.txt", { type: "text/plain" }),
+      400,
+      "Filen måste vara en PDF",
+    ],
+    [
+      "wrong extension",
+      new File(["pdf"], "notes.txt", { type: "application/pdf" }),
+      400,
+      "Filen måste vara en PDF",
+    ],
+    [
+      "empty file",
+      new File([], "empty.pdf", { type: "application/pdf" }),
+      400,
+      "PDF-filen är tom",
+    ],
+  ])("rejects %s before indexing", async (_case, file, status, error) => {
+    const res = await POST(createRequest(file));
+    const json = await res.json();
+
+    expect(res.status).toBe(status);
+    expect(json.error).toBe(error);
+    expect(mocks.pdfParse).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it("rejects files larger than 10 MB before creating a document", async () => {
+    const oversizedFile = new File(
+      [new Uint8Array(10 * 1024 * 1024 + 1)],
+      "large.pdf",
+      { type: "application/pdf" },
+    );
+
+    const res = await POST(createRequest(oversizedFile));
+    const json = await res.json();
+
+    expect(res.status).toBe(413);
+    expect(json.error).toBe("PDF-filen får vara högst 10 MB");
+    expect(mocks.from).not.toHaveBeenCalled();
   });
 
   it("returns 400 when extracted text is empty", async () => {

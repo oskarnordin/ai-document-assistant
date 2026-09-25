@@ -65,6 +65,25 @@ describe("/api/documents/[id]", () => {
     expect(mocks.from).not.toHaveBeenCalled();
   });
 
+  it("rejects an empty or oversized filename", async () => {
+    for (const filename of ["   ", "a".repeat(256)]) {
+      const res = await PATCH(
+        new Request("http://localhost/api/documents/" + documentId, {
+          method: "PATCH",
+          body: JSON.stringify({ filename }),
+        }),
+        params(),
+      );
+
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe(
+        "Filnamnet måste innehålla 1-255 tecken",
+      );
+    }
+
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
   it("deletes a document and relies on database cascade for chunks", async () => {
     const res = await DELETE(
       new Request("http://localhost/api/documents/" + documentId),
