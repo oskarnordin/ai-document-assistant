@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   single: vi.fn(),
   eq: vi.fn(),
+  getAuthenticatedUser: vi.fn(),
 }));
 
 vi.mock("pdf-parse/lib/pdf-parse.js", () => ({
@@ -22,6 +23,13 @@ vi.mock("@supabase/supabase-js", () => ({
     from: mocks.from,
   }),
 }));
+
+vi.mock("../../../lib/supabase", async () => {
+  const actual = await vi.importActual<typeof import("../../../lib/supabase")>(
+    "../../../lib/supabase",
+  );
+  return { ...actual, getAuthenticatedUser: mocks.getAuthenticatedUser };
+});
 
 vi.mock("ai", () => ({
   embedMany: mocks.embedMany,
@@ -40,6 +48,7 @@ function createRequest(file?: File) {
 describe("POST /api/upload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getAuthenticatedUser.mockResolvedValue({ id: "user-1" });
     mocks.single.mockResolvedValue({ data: { id: "document-1" }, error: null });
     mocks.select.mockReturnValue({ single: mocks.single });
     mocks.eq.mockResolvedValue({ error: null });
@@ -60,9 +69,25 @@ describe("POST /api/upload", () => {
     mocks.insert.mockResolvedValue({ error: null });
   });
 
+  it("returns 401 when the request is not authenticated", async () => {
+    mocks.getAuthenticatedUser.mockResolvedValue(null);
+
+    const res = await POST(
+      createRequest(
+        new File(["%PDF- unauthenticated"], "test.pdf", {
+          type: "application/pdf",
+        }),
+      ),
+    );
+
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe("Du måste vara inloggad");
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
   it("returns success and persists chunks when PDF is valid", async () => {
     const pdfText = "Detta är text från PDF-filen.";
-    const file = new File(["pdf-bytes"], "test.pdf", {
+    const file = new File(["%PDF- test pdf bytes"], "test.pdf", {
       type: "application/pdf",
     });
     mocks.pdfParse.mockResolvedValue({ text: pdfText });
@@ -110,7 +135,9 @@ describe("POST /api/upload", () => {
 
     const res = await POST(
       createRequest(
-        new File(["pdf"], "many-chunks.pdf", { type: "application/pdf" }),
+        new File(["%PDF- many chunks"], "many-chunks.pdf", {
+          type: "application/pdf",
+        }),
       ),
     );
 
@@ -182,12 +209,28 @@ describe("POST /api/upload", () => {
     expect(mocks.from).not.toHaveBeenCalled();
   });
 
+  it("rejects a file with a PDF extension but invalid file signature", async () => {
+    const res = await POST(
+      createRequest(
+        new File(["not really a PDF"], "fake.pdf", {
+          type: "application/pdf",
+        }),
+      ),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toBe("Filen verkar inte vara en giltig PDF");
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.pdfParse).not.toHaveBeenCalled();
+  });
+
   it("returns 400 when extracted text is empty", async () => {
     mocks.pdfParse.mockResolvedValue({ text: " \n\t" });
 
     const res = await POST(
       createRequest(
-        new File(["pdf"], "empty.pdf", { type: "application/pdf" }),
+        new File(["%PDF- empty pdf"], "empty.pdf", { type: "application/pdf" }),
       ),
     );
     const json = await res.json();
@@ -223,7 +266,9 @@ describe("POST /api/upload", () => {
 
       const res = await POST(
         createRequest(
-          new File(["pdf"], "failure.pdf", { type: "application/pdf" }),
+          new File(["%PDF- failure pdf"], "failure.pdf", {
+            type: "application/pdf",
+          }),
         ),
       );
       const json = await res.json();

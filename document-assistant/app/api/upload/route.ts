@@ -5,7 +5,10 @@ import { openai } from "@ai-sdk/openai";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { chunkText } from "../../../lib/chunking";
 import { ragConfig } from "../../../lib/rag-config";
-import { createServerSupabaseClient } from "../../../lib/supabase";
+import {
+  createServerSupabaseClient,
+  getAuthenticatedUser,
+} from "../../../lib/supabase";
 
 export const runtime = "nodejs";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -15,6 +18,14 @@ export async function POST(req: Request) {
   let supabase: ReturnType<typeof createServerSupabaseClient> | null = null;
 
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Du måste vara inloggad" },
+        { status: 401 },
+      );
+    }
+
     supabase = createServerSupabaseClient();
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -47,9 +58,18 @@ export async function POST(req: Request) {
       );
     }
 
+    const buffer = Buffer.from(await file.arrayBuffer());
+    if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
+      return NextResponse.json(
+        { error: "Filen verkar inte vara en giltig PDF" },
+        { status: 400 },
+      );
+    }
+
     const { data: document, error: documentError } = await supabase
       .from("documents")
       .insert({
+        user_id: user.id,
         filename: file.name,
         mime_type: file.type,
         file_size: file.size,
@@ -68,10 +88,6 @@ export async function POST(req: Request) {
 
     documentId = document.id;
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Byt ut new pdfParse(...) mot direkt anrop
     const pdfData = await pdfParse(buffer);
     const fullText = pdfData.text;
 
