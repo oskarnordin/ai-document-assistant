@@ -1,327 +1,453 @@
 # 📄 Document & Knowledge Assistant
 
-A small web app where you **upload a PDF** and then **chat with it** — you ask questions, and an AI answers using only the content of that PDF. This is a classic **RAG** app (Retrieval-Augmented Generation).
+A full-stack RAG app for authenticated PDF Q&A. Users sign in, upload PDF sources, manage a document registry, pick a ready document, and ask questions grounded in that document's indexed content.
 
 ---
 
 ## 1. The big idea
 
-Normal AI chatbots (like plain ChatGPT) only know what they were trained on — they've never seen _your_ PDF. This app fixes that by:
+This app solves a very common AI problem: a model has no knowledge of your private PDF unless you provide it as context. The flow is:
 
-1. Reading your PDF and breaking it into small text chunks.
-2. Converting each chunk into a list of numbers (an **embedding**) that represents its _meaning_.
-3. Storing those chunks + numbers in a database (Supabase).
-4. When you ask a question, it converts your question into numbers too, finds the chunks whose numbers are most "similar" (closest meaning), and hands those chunks to the AI as **context**.
-5. The AI then answers your question using only that context.
+1. A user uploads a PDF.
+2. The app extracts the text and splits it into overlapping chunks.
+3. Each chunk is converted into an embedding with OpenAI.
+4. The chunk + embedding are stored against a specific document in Supabase.
+5. When a user asks a question, the app embeds the question and retrieves only the most relevant chunks from the selected document.
+6. The AI answers using that retrieved context only.
 
-This is why the AI can answer questions about a document it was never trained on — it "cheats" by being handed the relevant paragraphs right before answering.
+This keeps the answer grounded to the selected source instead of mixing unrelated documents or general model knowledge.
 
 ---
 
-## 2. High-level architecture
+## 2. What changed recently
+
+The current app is no longer a single shared document store. It now includes:
+
+- Supabase Auth-based login flow in the browser UI.
+- A per-user document registry with status tracking: `processing`, `ready`, and `failed`.
+- A document lifecycle with `documents` and `document_chunks` ownership tied to `user_id`.
+- Retrieval filtered to the chosen `documentId` instead of searching across every PDF ever uploaded.
+- RAG metadata stored on each document (`rag_config_version`, `chunk_max_size`, `chunk_overlap`, `embedding_model`).
+- Evaluation configs for retrieval quality and answer quality in the `evaluation/` directory.
+- Cleanup and rename/delete flows for document management.
+
+These changes are implemented across:
+
+- `app/api/upload/route.ts`
+- `app/api/chat/route.ts`
+- `app/api/documents/route.ts`
+- `app/api/documents/[id]/route.ts`
+- `supabase/migrations/*.sql`
+- `lib/rag-config.ts`
+- `evaluation/*.ts`
+
+---
+
+## 3. High-level architecture
 
 ```mermaid
 flowchart LR
-    U["🧑 User (Browser)"] -->|"1. Upload PDF"| UP["/api/upload"]
-    U -->|"4. Ask a question"| CH["/api/chat"]
-npm test -- --run  # run the Vitest suite once
+    U["User in browser"] -->|1. Sign in| AUTH["Supabase Auth"]
+    U -->|2. Upload PDF| UP["/api/upload"]
+    U -->|3. Manage docs| DOCS["/api/documents"]
+    U -->|4. Ask question| CH["/api/chat"]
 
+    UP -->|Parse text| P["pdf-parse"]
+    UP -->|Chunk + embed| O1["OpenAI embeddings"]
+    UP -->|Store rows| DB[("Supabase\nPostgres + pgvector")]
 
-## 12. Test checklist for changes
-
-    UP -->|"2. Extract text + split into chunks"| PARSE["pdf-parse"]
-    UP -->|"3. Turn chunks into embeddings"| EMB1["OpenAI Embeddings API"]
-    UP -->|"4. Save chunks + embeddings"| DB[("Supabase\n(Postgres + pgvector)")]
-
-    CH -->|"5. Turn question into embedding"| EMB2["OpenAI Embeddings API"]
-
-    CH -->|"6. Find similar chunks (match_chunks)"| DB
-    CH -->|"7. Send question + matched chunks"| LLM["OpenAI GPT-4o"]
-    LLM -->|"8. Streamed answer"| CH
-    CH -->|"9. Streamed answer"| U
+    CH -->|Embed latest question| O2["OpenAI embeddings"]
+    CH -->|match_chunks with filter_document_id| DB
+    CH -->|Send context + prompt| LLM["OpenAI GPT-4o"]
+    LLM -->|Streaming answer| U
 ```
 
-- **Frontend**: one page (`app/page.tsx`) — upload box + chat window.
-- **Backend**: two Next.js API routes — `/api/upload` and `/api/chat`.
-
-## 13. Key concepts explained (glossary)
-
-- **AI provider**: OpenAI, for both embeddings and the chat model.
+- Frontend: client-side upload, document registry, and chat UI in `app/page.tsx`
+- Backend: Next.js API routes for upload, chat, and document CRUD
+- Database: Supabase Postgres with `pgvector` and row-level security
 
 ---
 
-## 3. Tech stack
+## 4. Tech stack
 
-| Layer       | Technology                                                                     | Why it's used                                                           |
-| ----------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| Framework   | [Next.js 16](https://nextjs.org/) (App Router)                                 | Full-stack React framework — pages + API routes in one project          |
-| UI          | React 19, Tailwind CSS v4, shadcn/ui, lucide-react icons                       | Pre-built accessible components (`Button`, `Card`, `Input`) + icons     |
-| AI SDK      | [Vercel `ai` SDK](https://sdk.vercel.ai/) + `@ai-sdk/react` + `@ai-sdk/openai` | Standardized way to stream chat messages and call LLMs/embedding models |
-| AI Model    | OpenAI `gpt-4o` (chat) + `text-embedding-3-small` (embeddings)                 | Generates answers and turns text into vectors                           |
-| PDF parsing | `pdf-parse`                                                                    | Extracts raw text out of an uploaded PDF                                |
-| Database    | Supabase (Postgres + `pgvector`)                                               | Stores document chunks and their embeddings, and runs similarity search |
-| Validation  | `zod`                                                                          | Validates the shape of AI tool inputs                                   |
-| Language    | TypeScript                                                                     | Type safety across frontend and backend                                 |
+| Layer       | Technology                                         | Why it is used                                            |
+| ----------- | -------------------------------------------------- | --------------------------------------------------------- |
+| Framework   | Next.js 15                                         | App Router, full-stack routing, server actions/API routes |
+| UI          | React 19, Tailwind CSS v4, shadcn/ui               | Chat UI, upload flow, reusable cards and inputs           |
+| Auth        | Supabase Auth + `@supabase/ssr`                    | User session handling and per-user document ownership     |
+| AI SDK      | Vercel AI SDK + `@ai-sdk/react` + `@ai-sdk/openai` | Streaming chat responses and embedding calls              |
+| Models      | `gpt-4o` + `text-embedding-3-small`                | Chat generation and vector embedding                      |
+| PDF parsing | `pdf-parse`                                        | Extract text from uploaded PDFs                           |
+| Database    | Supabase Postgres + `pgvector`                     | Vector search and document storage                        |
+| Validation  | `zod`                                              | Tool/input validation for structured tool calls           |
+| Language    | TypeScript                                         | Type safety across client and server                      |
 
 ---
 
-## 4. Folder structure
+## 5. Folder structure
 
-```
+```text
 document-assistant/
 ├─ app/
-│  ├─ layout.tsx        → Root HTML layout (fonts, <html>/<body>, page title)
-│  ├─ page.tsx           → The ONLY page: upload UI + chat UI (client component)
-│  ├─ globals.css        → Tailwind + theme styles
-│  └─ api/
-│     ├─ upload/route.ts → POST: receives PDF → parses → chunks → embeds → stores
-│     └─ chat/route.ts   → POST: receives chat messages → retrieves context → streams AI answer
-├─ components/ui/        → Reusable UI primitives (shadcn/ui): button, card, input
-├─ lib/utils.ts           → Small helper (`cn`) for merging Tailwind classes
-├─ public/                → Static assets
-├─ next.config.ts         → Next.js config (PDF parsing needs special bundling settings)
-├─ components.json        → shadcn/ui configuration (style, aliases, icon library)
-└─ .env.local             → Secret keys (OpenAI + Supabase) — NEVER commit this file
+│  ├─ api/
+│  │  ├─ chat/route.ts              → Authenticated chat requests + document-scoped retrieval
+│  │  ├─ documents/route.ts         → List documents for the logged-in user
+│  │  ├─ documents/[id]/route.ts    → Rename and delete a document
+│  │  └─ upload/route.ts            → Validate PDF → parse → chunk → embed → store
+│  ├─ globals.css                   → Global styles and theme
+│  ├─ layout.tsx                    → App shell metadata and providers
+│  └─ page.tsx                      → Main auth + upload + document registry + chat page
+├─ components/
+│  ├─ auth-form.tsx                 → Sign-in/sign-up UI
+│  └─ ui/                           → shadcn/ui primitives
+├─ evaluation/
+│  ├─ experiments.ts                → Evaluation configurations and summaries
+│  ├─ metrics.ts                    → Retrieval and answer quality metrics
+│  ├─ fixtures.ts                   → Provider-free evaluation fixtures
+│  └─ *.test.ts                     → Metric and experiment tests
+├─ lib/
+│  ├─ chunking.ts                   → Chunking helpers
+│  ├─ rag-config.ts                 → Baseline retrieval and model config
+│  ├─ rag-prompt.ts                 → Grounded system prompt builder
+│  ├─ supabase.ts                   → Server Supabase clients and auth helpers
+│  ├─ supabase-browser.ts           → Browser client helper
+│  └─ utils.ts                      → Tailwind class helper
+├─ public/                          → Static assets
+├─ supabase/migrations/             → Database schema updates and ownership lifecycle
+├─ .env.local                       → Secrets; never committed
+├─ next.config.ts                   → Next.js config
+├─ components.json                  → shadcn/ui config
+├─ package.json                     → Scripts and dependencies
+├─ vitest.config.ts                 → Test config
+├─ README.md                        → Project documentation
+└─ tsconfig.json                    → TypeScript config
 ```
 
 ---
 
-## 5. Step-by-step: what happens when you upload a PDF
+## 6. Authentication and document ownership
 
-**File involved:** [app/api/upload/route.ts](app/api/upload/route.ts)
+The app now expects a signed-in Supabase user before upload or chat is allowed.
+
+The main auth flow is:
+
+- User is checked with `getAuthenticatedUser()` on protected routes.
+- Requests without a valid session return `401`.
+- A `documents` row stores `user_id`.
+- Row-level security policies ensure users only see and manage their own documents and chunks.
+
+This prevents one user from searching another user’s documents or deleting unrelated PDFs.
+
+---
+
+## 7. Upload flow
+
+File involved: `app/api/upload/route.ts`
 
 ```mermaid
 sequenceDiagram
-    participant B as Browser (page.tsx)
+    participant B as Browser
     participant A as /api/upload
+    participant U as Supabase Auth
     participant P as pdf-parse
     participant O as OpenAI Embeddings
     participant S as Supabase
 
-    B->>A: POST FormData (the PDF file)
-    A->>P: Extract raw text from PDF bytes
-    P-->>A: Full text string
-    A->>A: splitTextIntoChunks() → array of ~500-char chunks (50-char overlap)
-    A->>O: embedMany(chunks) → one vector per chunk
-    O-->>A: Embeddings (arrays of numbers)
-    A->>S: INSERT rows into "document_chunks" (content + embedding)
-    S-->>A: OK
-    A-->>B: { success: true, count: N }
+    B->>U: Check logged-in user
+    U-->>B: user session
+    B->>A: POST FormData (PDF file)
+    A->>A: Validate PDF type, size, and header
+    A->>S: insert document row with status='processing'
+    S-->>A: document id
+    A->>P: Extract readable text from PDF
+    P-->>A: full text
+    A->>A: chunkText(fullText, ragConfig.chunking)
+    A->>O: embedMany(chunks)
+    O-->>A: embeddings
+    A->>S: insert rows into document_chunks with document_id + chunk_index
+    A->>S: update document status='ready'
+    A-->>B: { success: true, documentId, message }
 ```
 
-Explained simply:
+Important details:
 
-- **Text extraction**: `pdf-parse` reads the PDF's raw bytes and pulls out plain text (like copy-pasting all the words out of the PDF).
-- **Chunking** (`splitTextIntoChunks`): the AI can't process a 50-page document all at once effectively, so the text is cut into small overlapping pieces:
-  - `chunkSize = 500` characters per chunk.
-  - `chunkOverlap = 50` characters shared between consecutive chunks (so a sentence that gets cut in half isn't lost — it also appears in the next chunk).
-- **Embedding** (`embedMany`): each chunk of text is sent to OpenAI's `text-embedding-3-small` model, which returns a **vector** — a list of a few hundred numbers that mathematically represents the _meaning_ of that text. Similar meanings → similar numbers.
-- **Storing**: each `{ content, embedding }` pair is inserted as a row into a Supabase table called `document_chunks`.
-
-> Uploads are tracked as documents. Each chunk belongs to one `document_id`, and deleting a document also deletes its chunks through the database foreign key.
-
-### Document lifecycle
-
-Sprint 2 adds a `documents` table and these statuses:
-
-- `processing`: the PDF is being parsed and indexed.
-- `ready`: the document can be selected for chat.
-- `failed`: indexing stopped; the error is shown safely without exposing database details.
-
-Apply `supabase/migrations/20260924120000_document_lifecycle.sql` before using the new upload and document APIs. The migration removes old chunks that have no reliable document owner, because assigning them to an arbitrary document could mix unrelated PDFs.
-
-The document API is:
-
-- `GET /api/documents` — list documents and chunk counts.
-- `PATCH /api/documents/:id` — rename a document without re-indexing it.
-- `DELETE /api/documents/:id` — remove the document and its chunks.
-
-Chat requests must include the selected `documentId`, so retrieval is limited to that document.
+- The app validates the file is a real PDF and under 10 MB.
+- A `documents` row is created immediately with `status: "processing"`.
+- If parsing or embedding fails, the app deletes the chunk rows and marks the document as `failed` with an error message.
+- Each chunk row stores:
+  - `document_id`
+  - `chunk_index`
+  - `content`
+  - `embedding`
 
 ---
 
-## 6. Step-by-step: what happens when you ask a question
+## 8. Document API
 
-**File involved:** [app/api/chat/route.ts](app/api/chat/route.ts)
+The app exposes authenticated document management endpoints.
+
+- `GET /api/documents` — list the logged-in user’s documents, with `chunk_count`
+- `PATCH /api/documents/:id` — rename a document by id
+- `DELETE /api/documents/:id` — delete the document and its chunks via cascading foreign key
+
+These are implemented in:
+
+- `app/api/documents/route.ts`
+- `app/api/documents/[id]/route.ts`
+
+The frontend document registry supports:
+
+- select a ready document
+- rename a document
+- delete a document
+- show processing/ready/failed status and chunk counts
+
+---
+
+## 9. Chat flow and retrieval
+
+File involved: `app/api/chat/route.ts`
 
 ```mermaid
 sequenceDiagram
-    participant B as Browser (page.tsx)
+    participant B as Browser
     participant C as /api/chat
     participant O1 as OpenAI Embeddings
     participant S as Supabase (pgvector)
     participant O2 as OpenAI GPT-4o
 
-    B->>C: POST { messages: [...chat history] }
-    C->>C: Grab the last user message's text
+    B->>C: POST { messages, documentId }
+    C->>C: Validate auth and document ownership
+    C->>C: Read last user text from message history
     C->>O1: embed(lastUserMessage)
-    O1-->>C: Question embedding (vector)
-    C->>S: rpc("match_chunks", { query_embedding, match_threshold: 0.3, match_count: 4 })
-    S-->>C: Up to 4 most similar chunks
-    C->>C: Join chunks into one "context" string
-    C->>O2: streamText({ system: "...context...", messages, tools })
-    O2-->>C: Streamed tokens (+ optional tool call)
-    C-->>B: Streamed UI message (rendered live in chat)
+    O1-->>C: query embedding
+    C->>S: rpc("match_chunks", { query_embedding, match_threshold, match_count, filter_document_id: documentId })
+    S-->>C: relevant chunks for that document only
+    C->>C: Build context from matched chunk content
+    C->>O2: streamText({ system, messages, tools })
+    O2-->>C: streamed output
+    C-->>B: answer stream
 ```
 
-Explained simply:
+The current retrieval logic is intentionally scoped to one document:
 
-- **Embed the question**: same trick as before — the user's question is turned into a vector.
-- **Similarity search** (`supabase.rpc("match_chunks", ...)`): this calls a Postgres **function** (defined inside Supabase, not in this repo's code) that uses `pgvector` to find the chunks whose embeddings are mathematically closest to the question's embedding — i.e., "which parts of the document are most relevant to this question?"
-  - `match_threshold: 0.3` → only chunks similar enough are returned.
-  - `match_count: 4` → return at most 4 chunks.
-- **Build context**: the matched chunks' text is joined together with `\n---\n` and inserted into the AI's **system prompt**, together with an instruction: _"Only answer based on this context. If the answer isn't there, say the information is missing."_ This instruction is what stops the AI from making things up outside the document (reduces hallucination).
-- **Streaming answer**: `streamText` calls GPT-4o and streams the answer back token-by-token, so the browser sees the text appear gradually instead of waiting for the whole reply.
-- **Tool calling** (`getSummaryCard`): the AI has an extra "tool" it can decide to use — if the user seems to be asking for a _summary_, GPT-4o can call this tool with a title + bullet points, and the frontend renders that as a nice summary card in the chat instead of plain text. This uses `zod` to strictly define what shape the tool's input must have.
+- Chat requests require a valid `documentId`.
+- The server checks the document belongs to the signed-in user.
+- The document must have `status === "ready"`.
+- Retrieval runs through `supabase.rpc("match_chunks", ...)` with a `filter_document_id` parameter.
+
+This is the critical improvement over the earlier single shared index.
 
 ---
 
-## 7. The database (Supabase / pgvector)
+## 10. Database schema and migrations
 
-This project relies on a Supabase Postgres database with the [`pgvector`](https://github.com/pgvector/pgvector) extension enabled. That part is **configured directly in your Supabase project**, not in this repo. Based on how the code uses it, you need something like:
+The project relies on a Supabase Postgres database with the `pgvector` extension enabled.
+
+The migration chain is:
+
+1. `supabase/migrations/20260924120000_document_lifecycle.sql`
+   - creates the `documents` table
+   - adds `document_id`, `chunk_index`, and on-delete cascade behavior to `document_chunks`
+   - creates the `match_chunks` SQL function with `filter_document_id`
+   - removes legacy anonymous chunks without a reliable owner
+
+2. `supabase/migrations/20260924123000_rag_experiment_metadata.sql`
+   - adds per-document metadata for rag config version and chunk settings
+
+3. `supabase/migrations/20260925100000_document_ownership.sql`
+   - adds `user_id` to documents
+   - turns on row-level security for documents and chunks
+   - adds policies so users can only access their own data
+
+Core schema shape:
 
 ```sql
--- 1. Enable the vector extension
-create extension if not exists vector;
+create table documents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  filename text not null,
+  mime_type text not null default 'application/pdf',
+  file_size bigint not null check (file_size > 0),
+  status text not null default 'processing' check (status in ('processing', 'ready', 'failed')),
+  error_message text,
+  rag_config_version text,
+  chunk_max_size integer,
+  chunk_overlap integer,
+  embedding_model text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
 
--- 2. Table that stores each text chunk + its embedding
+```sql
 create table document_chunks (
   id bigint generated always as identity primary key,
+  document_id uuid not null references documents(id) on delete cascade,
+  chunk_index integer not null,
   content text not null,
-  embedding vector(1536) -- text-embedding-3-small produces 1536 numbers
+  embedding vector(1536) not null
 );
+```
 
--- 3. Function used by /api/chat to find similar chunks
-create or replace function match_chunks (
+The retrieval function is shaped like this in the current app:
+
+```sql
+create or replace function match_chunks(
   query_embedding vector(1536),
   match_threshold float,
-  match_count int
+  match_count int,
+  filter_document_id uuid
 )
 returns table (id bigint, content text, similarity float)
 language sql stable
 as $$
   select
-    id,
-    content,
-    1 - (embedding <=> query_embedding) as similarity
-  from document_chunks
-  where 1 - (embedding <=> query_embedding) > match_threshold
+    dc.id,
+    dc.content,
+    1 - (dc.embedding <=> query_embedding) as similarity
+  from document_chunks dc
+  where dc.document_id = filter_document_id
+    and 1 - (dc.embedding <=> query_embedding) > match_threshold
   order by similarity desc
   limit match_count;
 $$;
 ```
 
-> `<=>` is pgvector's **cosine distance** operator — it measures how "far apart" two vectors point. `1 - distance` turns that into a 0–1 "similarity" score (1 = identical meaning).
+---
+
+## 11. Frontend behavior
+
+The main page in `app/page.tsx` contains:
+
+- sign-in state for the authenticated user
+- upload form for PDF ingestion
+- document registry with rename/delete controls
+- selected document state for RAG chat
+- live chat with `useChat` from `@ai-sdk/react`
+- summary-card tool rendering when the model calls `getSummaryCard`
+
+The upload panel shows a loading state while indexing, then a success or failure message. The chat form is disabled until a selected document is ready.
 
 ---
 
-## 8. The frontend UI
+## 12. RAG configuration and evaluation
 
-**File:** [app/page.tsx](app/page.tsx) — this is a **client component** (`"use client"`) meaning it runs in the browser and can use React state/hooks.
+The baseline RAG configuration lives in `lib/rag-config.ts`:
 
-- **`useChat` hook** (from `@ai-sdk/react`): manages the whole chat conversation — messages array, sending messages, and connection status (`ready`, `submitted`, `streaming`, etc.). It's wired to call `/api/chat` via `DefaultChatTransport`.
-- **Upload card**: a hidden `<input type="file">` styled as a drop-zone. On file select, it:
-  1. Shows a loading spinner + "reading and indexing PDF..." message.
-  2. Sends the file as `FormData` to `/api/upload`.
-  3. Shows a success (✅) or failure message based on the response.
-- **Chat card**: renders each message bubble (user on the right, AI on the left with a bot icon). Each message can contain:
-  - `part.type === "text"` → plain paragraph text.
-  - `part.type === "tool-getSummaryCard"` → a rendered summary `Card` with a bulleted list (only shown once the tool has finished running, `state === "output-available"`).
-- **Input form**: a text box + send button, disabled while the AI is busy (`status !== "ready"`).
+| Parameter           | Baseline                 |
+| ------------------- | ------------------------ |
+| Chunk size          | 500                      |
+| Overlap             | 50                       |
+| Embedding model     | `text-embedding-3-small` |
+| Retrieval threshold | 0.3                      |
+| Retrieved chunks    | 4                        |
+| Prompt variant      | `baseline`               |
+| Chat model          | `gpt-4o`                 |
 
-**File:** [app/layout.tsx](app/layout.tsx) — wraps every page with:
+The project includes evaluation experiments for multiple variants:
 
-- The `<html>`/`<body>` tags, a Google Font (Roboto), and page metadata (title/description shown in the browser tab).
+- `baseline-v1`
+- `strict-grounding-v1`
+- `focused-retrieval-v1`
 
-**Folder:** [components/ui/](components/ui/) — `button.tsx`, `card.tsx`, `input.tsx` are [shadcn/ui](https://ui.shadcn.com/) components: pre-built, copy-into-your-project (not npm-installed) UI primitives styled with Tailwind, configured via [components.json](components.json).
+These are defined in `evaluation/experiments.ts` and measured in `evaluation/metrics.ts`.
 
-**File:** [lib/utils.ts](lib/utils.ts) — exports `cn()`, a tiny helper used everywhere to safely merge conditional Tailwind class names (e.g. `cn("p-2", isActive && "bg-blue-500")`).
+The metrics cover:
+
+- retrieval hit@k
+- recall@k
+- reciprocal rank
+- empty results
+- false positives
+- groundedness
+- factual correctness
+- refusal behavior for unsupported answers
+
+Run the deterministic checks with:
+
+```bash
+npm run evaluate
+```
+
+> Live-model judging is intentionally separated from the normal test workflow and should only be used in a separately gated experiment.
 
 ---
 
-## 9. Configuration files
+## 13. Environment variables
 
-| File                                   | Purpose                                                                                                                                                                 |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [next.config.ts](next.config.ts)       | Tells Next.js to treat `pdf-parse`/`pdfjs-dist` as external server packages — needed because they rely on Node.js file resolution tricks that break if bundled normally |
-| [components.json](components.json)     | shadcn/ui settings: style theme, Tailwind CSS file location, import aliases (`@/components`, `@/lib`, etc.)                                                             |
-| [tsconfig.json](tsconfig.json)         | TypeScript compiler settings + `@/*` path alias                                                                                                                         |
-| [eslint.config.mjs](eslint.config.mjs) | Linting rules (Next.js recommended + TypeScript)                                                                                                                        |
-| `.env.local`                           | Secret environment variables (see below) — git-ignored, never committed                                                                                                 |
-
----
-
-## 10. Environment variables
-
-Create a `.env.local` file (already git-ignored) with:
+Create a `.env.local` file at the project root with:
 
 ```env
-OPENAI_API_KEY=sk-...                        # OpenAI API key, used for embeddings + GPT-4o
-NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co   # Your Supabase project URL
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_...       # Supabase service-role key (server-side only!)
+OPENAI_API_KEY=sk-...
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
 ```
 
-> 🔒 **Security note:** `SUPABASE_SERVICE_ROLE_KEY` bypasses Row Level Security and must **only** ever be used on the server (as it is here, inside API routes) — never expose it to the browser. Likewise, never commit `.env.local` to git or share these keys publicly.
+Notes:
+
+- `OPENAI_API_KEY` is used for embeddings and GPT chat completions.
+- `NEXT_PUBLIC_SUPABASE_URL` is used by the browser and server clients.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` is used for browser-authenticated requests.
+- `SUPABASE_SERVICE_ROLE_KEY` must stay on the server and must never be exposed to the browser.
 
 ---
 
-## 11. Running the project
+## 14. Running the project
 
 ```bash
-npm install       # install dependencies
-npm run dev       # start the dev server → http://localhost:3000
+npm install
+npm run dev
 ```
 
-Other scripts:
+Then open:
+
+- http://localhost:3000
+
+Useful scripts:
 
 ```bash
-npm run build     # production build
-npm run start     # run the production build
-npm run lint      # run ESLint
-npm run evaluate   # run deterministic RAG quality evaluation
+npm run build
+npm run start
+npm run lint
+npm test -- --run
+npm run evaluate
 ```
 
-## Sprint 3: RAG quality and evaluation
+---
 
-The baseline experiment is defined in `lib/rag-config.ts`:
+## 15. Key concepts explained
 
-| Parameter | Baseline |
-| --- | --- |
-| Chunk size | 500 characters |
-| Chunk overlap | 50 characters |
-| Embedding model | `text-embedding-3-small` |
-| Retrieval threshold | 0.3 |
-| Retrieved chunks | 4 |
-| Chat model | `gpt-4o` |
-
-Each uploaded document stores the indexing configuration version, chunk size,
-overlap, and embedding model in the database. This makes re-indexing runs
-comparable without changing the production baseline implicitly.
-
-The provider-free evaluation fixtures in `evaluation/` measure retrieval
-hit@k, recall@k, reciprocal rank, empty results, false positives, grounded
-facts, answer correctness, and refusal for questions without evidence. Run
-them with `npm run evaluate`. Live model judging is intentionally not part of
-normal CI and should be added only as a separately gated experiment.
+- RAG: retrieve relevant document chunks and feed them into the model before generating a response.
+- Embedding: numeric representation of meaning for a text snippet.
+- Chunking: splitting long text into smaller overlapping pieces for better retrieval and context use.
+- pgvector: Postgres extension for vector similarity search.
+- Cosine similarity: measure of how close two vectors are in meaning space.
+- Streaming: showing model output token by token as it is generated.
+- Tool calling: letting the model call a structured tool such as a summary card.
+- System prompt: hidden instructions that steer the model toward grounded answers exclusively from the provided context.
 
 ---
 
-## 12. Key concepts explained (glossary)
+## 16. Known limitations
 
-- **RAG (Retrieval-Augmented Generation)**: instead of relying only on what the AI model learned during training, you _retrieve_ relevant info from your own data first, then _augment_ the AI's prompt with it before it _generates_ an answer.
-- **Embedding**: a way to convert text into a list of numbers (a vector) that captures its meaning. Texts with similar meaning end up with numbers that are mathematically close together.
-- **Chunking**: splitting a long document into smaller pieces, because embeddings and AI context windows work best on short, focused pieces of text rather than an entire document at once.
-- **Vector database / `pgvector`**: a database (or extension) specialized in storing vectors and quickly finding "nearest neighbors" — i.e., which stored vectors are most similar to a given query vector.
-- **Cosine similarity/distance**: a math formula that measures the angle between two vectors to determine how similar they are, regardless of their length.
-- **Streaming**: sending the AI's response piece-by-piece as it's generated, instead of waiting for the entire answer, so the UI can show text appearing live.
-- **Tool calling**: giving an LLM a defined "function" it can choose to call (with structured arguments) as part of its response, so the app can render custom UI (like the summary card) instead of just plain text.
-- **System prompt**: hidden instructions sent to the AI before the actual conversation, used here to inject the retrieved document context and tell the AI to stick to it.
+- Document indexing is still limited to PDF files.
+- Auth is required, but there is no multi-tenant admin layer beyond per-user ownership.
+- Uploaded documents are not versioned or re-indexed from the UI by default; they are managed through file upload and CRUD APIs.
+- Errors are intentionally surfaced in a user-friendly way rather than exposing raw database internals.
+- The app currently assumes one active document selection per chat session.
 
 ---
 
-## 13. Known limitations (things to be aware of)
+## 17. Suggested next steps
 
-- No multi-document separation: all uploaded PDFs' chunks are stored together — the app doesn't currently track "which document" a chunk came from, so asking a question searches across _everything_ ever uploaded.
-- No authentication: anyone with access to the app can upload files and query the database.
-- No deletion/cleanup endpoint: there's no way (yet) to clear old chunks from the database through the UI.
-- Errors are only shown as generic messages ("Something went wrong") — detailed errors are just logged to the server console.
+If you want to extend the app further, the most natural next steps are:
+
+- add document preview or page-level extraction stats
+- support OCR or DOCX ingestion in addition to PDFs
+- add multi-document comparison and cross-document search
+- build a quality dashboard from evaluation summaries
+- add background indexing jobs for larger files
+
+This project is intentionally small and practical: it demonstrates a grounded, document-scoped RAG system with real user ownership, indexing, retrieval, and evaluation in one codebase.
