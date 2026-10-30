@@ -11,6 +11,10 @@ create table if not exists documents (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists document_chunks (
+  id uuid primary key default gen_random_uuid()
+);
+
 alter table document_chunks
   add column if not exists content text,
   add column if not exists embedding vector(1536),
